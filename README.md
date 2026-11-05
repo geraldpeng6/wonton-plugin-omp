@@ -1,11 +1,13 @@
-# 云吞插件模板
+# omp
 
-云吞（Wonton）的插件就是一个 `docker-compose.yml`，顶层多一个 `x-wonton` 字段，写明插件在云吞里的身份、网页入口和要的
-权限。一个插件一个 Git 仓库，仓库根目录就是插件包，发布就是打 tag。用户在 App 里装上插件，核心按清单起容器、接好登录，
-插件的网页在 App 里作为小程序打开。
+omp 是住在云吞里的 Agent：用核心分配的 Matrix 身份和主人聊天，经云吞模型网关调用模型，经 Wonton MCP 总线调用工具。
+它只说 ACP，插件里自带一个固定的 Wonton ACP 桥；模型不用账号，也不用填 key。
 
-这个仓库是模板：一个能装上的示例插件（nginx 显示一个向用户问好的网页），加上检查、开发环境和发布三个脚本。从这个模板
-新建仓库，照着下面把示例换成你的应用。
+一个插件一个 Git 仓库，仓库根目录就是插件包，发布就是打 tag。下面大部分是写插件的通用指南，`scripts/` 三个脚本照常能用。
+
+## 图标
+
+`icon.svg` 是 omp 的官方标志，等比放在 `#111111` 底上，原样使用。来源、许可证和商标说明见 [NOTICE](NOTICE)。
 
 ## 准备
 
@@ -27,28 +29,37 @@ scripts/dev.sh up
 scripts/dev.sh install
 ```
 
-`up` 在本机起一套云吞，打印它的地址。示例（实例名取自目录名加 4 位随机数，端口随机）是
-`http://template3f2a.wonton.localhost:21234/`。浏览器打开，用 `scripts/dev.sh token` 输出的用户令牌登录。`install` 先列出
-插件要的权限，确认后装上，打印插件网页的地址。
+`up` 在本机起一套云吞，打印它的地址（实例名取自目录名加 4 位随机数，端口随机）。插件没有网页，装好以后核心在聊天列表里
+建好和它的加密私聊，在那里和它说话；App 或 `scripts/dev.sh pair` 把它加进客户端。`install` 先列出插件要的权限，确认后装上。
 
-示例网页经 `sso: proxy` 拿到用户名，打开就是“你好，<用户名>”。换成真实应用时，把示例的 `description`、`about`、`tags`
-换成你的，`web/`、compose 里的两个 `configs` 和 `sso: proxy` 及其 `proxy` 删掉（默认让应用自己登录），`webui.service`、
-`port` 换成你的，按下面的规则重写。Chrome、Firefox 和 curl 把 `*.localhost` 直接解析到本机，不用改 hosts。
+`docker-compose.yml` 的两个镜像按摘要固定：桥是主仓库发布的镜像，agent 是 `images/wonton-plugin-omp/` 构建的。本地开发前先
+按下面的“构建镜像”把它们构建出来并写上本地的摘要；镜像正式发布以后换成发布版本的摘要。
+
+## 构建镜像
+
+```bash
+docker build -t ghcr.io/geraldpeng6/wonton-acp-bridge:0.1.0 \
+  -f ../wonton-ro/deploy/dev/acp-bridge/Dockerfile ../wonton-ro
+docker build -t ghcr.io/geraldpeng6/wonton-plugin-omp:0.1.0 -f images/wonton-plugin-omp/Dockerfile images/wonton-plugin-omp
+```
+
+构建出来的是本地镜像，`docker image inspect -f '{{.Id}}'` 就是要写回 compose 的摘要。桥的 Dockerfile 在主仓库，
+`images/` 里没有它时 `scripts/publish.sh` 不会动它。
 
 ## 仓库里有什么
 
 | 路径 | 内容 |
 | --- | --- |
 | `docker-compose.yml` | 插件本身：compose 加上 `x-wonton` 清单 |
-| `icon.svg`、`web/` | 清单和 compose 引用的文件：图标、交给容器的配置和网页 |
+| `icon.svg` | 商店图标，来源和许可证见 `NOTICE` |
+| `images/wonton-plugin-omp/` | Agent 镜像：omp 的 Dockerfile、ACP 入口和上游许可证，不在插件包里 |
 | `screenshots/` | 商店详情页里的截图 |
 | `scripts/check.sh` | 检查插件包，规则和安装时一样 |
 | `scripts/dev.sh` | 开发环境：起一套云吞，装、重装、卸载插件，看日志 |
 | `scripts/smoke-probes.sh` | `scripts/dev.sh smoke` 对这个插件逐项的探测 |
-| `scripts/publish.sh` | 发布一个版本：打 tag、推送；`images/` 里有自己构建的镜像时先构建、推送并按摘要写回（示例没有） |
 | `AGENTS.md` | 给人和 AI 编程代理的规则 |
-| `LICENSE` | 插件包自己的许可证；从模板新建时换成作者自己的名字和年份 |
-| `NOTICE` | 图标等第三方素材的许可和声明；图标是自己画的就写原创和插件许可证，见第 10 步 |
+| `LICENSE` | 插件包自己的许可证 |
+| `NOTICE` | 官方标志、上游程序和镜像的来源、许可与商标声明 |
 | `.wonton/` | 开发环境的设置、密钥和数据，不提交 |
 
 插件包是 `docker-compose.yml` 加上它引用的文件：`icon`、`settings`、`bot.avatar`、`notices` 和顶层 `configs` 的 `file`。README、

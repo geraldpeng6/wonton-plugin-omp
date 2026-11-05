@@ -1,61 +1,110 @@
-# 示例插件：nginx 显示一个网页，向登录的人问好。照着 README 的“写插件”换成你的应用。
+# omp Agent：bridge 说 ACP，agent 跑固定版本的 omp。两个服务只共享 ACP socket 所在的 run/ 子目录；bridge 的
+# crypto store 和 Matrix 令牌不给 agent，agent 的 HOME 和工作区不给 bridge。
 services:
-  web:
-    # 镜像按摘要固定（多架构镜像写清单列表的摘要），标签只给人看。
-    image: nginx:1.30.6-alpine@sha256:0e52bd054126cdc040b1276c0af347aeb02a41b9cfe305d6094767ac30e97949
-    # 包里的文件经 configs 交给容器（核心在启动前写进去），不能用卷挂载。
-    configs:
-      - source: site
-        target: /etc/nginx/conf.d/default.conf
-      - source: page
-        target: /usr/share/nginx/html/index.html
+  agent:
+    image: ghcr.io/geraldpeng6/wonton-plugin-omp:0.1.0@sha256:36bd60fd448f393341e2c9e0783728e1eba4bf1aea1d0402c39983679d17d50e
+    # 镜像里固定用 65532，入口脚本不再降权；bridge 挂同一个 run/ 目录，两个服务的属主必须相同，否则核心拒绝安装。
+    user: "65532:65532"
+    restart: unless-stopped
+    environment:
+      HOME: /data/agent/home
+      # omp 不读 OPENAI_BASE_URL/OPENAI_MODEL，入口脚本把它们转成 models.yml 和 config.yml；密钥只引用变量名。
+      OPENAI_BASE_URL: ${WONTON_MODEL_BASE_URL:?需要模型网关地址}
+      OPENAI_API_KEY: ${WONTON_MODEL_API_KEY:?需要模型网关凭据}
+      OPENAI_MODEL: ${WONTON_MODEL_DEFAULT:?需要默认模型}
+      WONTON_ACP_SOCKET: /data/run/acp.sock
+      WONTON_AGENT_WORKSPACE: /workspace
+      # 插件网络是内部网络，到模型网关和 Matrix 都直连；Docker 注入的代理变量会让内部请求走代理，这里清掉。
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+    volumes:
+      - ${WONTON_BOT_DATA:?需要 Bot 数据目录}/agent:/data/agent
+      - ${WONTON_BOT_DATA}/run:/data/run
+      - ${WONTON_BOT_DATA}/workspace:/workspace
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      # socket 是入口脚本建好 ACP 转发后才有的，有这个文件就说明 Agent 侧能接连接。
+      test: ["CMD", "test", "-S", "/data/run/acp.sock"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      start_interval: 2s
+
+  bridge:
+    image: ghcr.io/geraldpeng6/wonton-acp-bridge:0.1.0@sha256:3d88353569818e1ec9eb6d5a235c88e1fc80fb052741b76c67defc61a05dc97e
+    user: "65532:65532"
+    restart: unless-stopped
+    depends_on:
+      agent:
+        condition: service_started
+    environment:
+      HOME: /data/bridge
+      WONTON_BOT_DATA: /data
+      WONTON_BRIDGE_DATA: /data/bridge
+      WONTON_ACP_SOCKET: /data/run/acp.sock
+      WONTON_AGENT_WORKSPACE: /workspace
+      WONTON_MATRIX_HOMESERVER: ${WONTON_MATRIX_HOMESERVER:?需要 Matrix 地址}
+      WONTON_MATRIX_ACCESS_TOKEN: ${WONTON_MATRIX_ACCESS_TOKEN:?需要 Bot 的 Matrix 访问令牌}
+      WONTON_MATRIX_OWNER: ${WONTON_MATRIX_OWNER:?需要主人的 Matrix 用户 ID}
+      WONTON_MATRIX_HOME_ROOM: ${WONTON_MATRIX_HOME_ROOM:?需要主人与 Bot 的主房间}
+      WONTON_MCP_URL: ${WONTON_MCP_URL:?需要 MCP 总线地址}
+      # omp 在 ACP 里的可用模式只有 default 和 plan，plan 是其中更严的一个：exec 一律问主人。
+      WONTON_ACP_MODE: plan
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
+    volumes:
+      - ${WONTON_BOT_DATA}/bridge:/data/bridge
+      - ${WONTON_BOT_DATA}/run:/data/run
+    healthcheck:
+      test: ["CMD", "test", "-S", "/data/run/acp.sock"]
       interval: 30s
       timeout: 5s
       start_period: 30s
-      start_interval: 1s
-
-configs:
-  site:
-    file: web/default.conf
-  page:
-    file: web/index.html
+      start_interval: 2s
 
 x-wonton:
-  spec: "0.4"
-  # 换成你自己的：反向域名形式，装上以后不能改。
-  id: app.example.hello
-  version: 0.1.1
-  kind: app
-  title: { zh: 你好, en: Hello }
-  description: { zh: 向登录的人问好的示例网页, en: An example page that greets whoever is signed in }
+  spec: "0.6"
+  id: ai.omp.agent
+  version: 0.1.0
+  kind: agent
+  title: { zh: omp, en: omp }
+  description:
+    zh: 会用工具写代码、跑命令的 Agent，在聊天里按你的确认动手
+    en: A tool-using coding agent that acts in chat, asking before it runs commands
   icon: icon.svg
-  notices: [NOTICE]
   screenshots: [screenshots/home.png]
-  author: { name: Example }
-  homepage: https://nginx.org
-  # 应用（这里是 nginx）的许可证；插件包自己的许可证写在仓库的 LICENSE 里。
-  license: BSD-2-Clause
-  tags:
-    zh: [工具]
-    en: [Tools]
+  notices: [NOTICE, images/wonton-plugin-omp/LICENSE.omp]
+  author: { name: Wonton plugin authors }
+  homepage: https://omp.sh
+  # omp 的许可证；插件包自己的许可证在 LICENSE。
+  license: MIT
+  tags: { zh: [AI, 开发], en: [AI, Development] }
   about:
     zh: |
-      一个示例网页：登录以后，页面会向你问好。新建插件时可以照着改。
+      Agent 的模型经模型网关走，不用账号，也不用填任何 key。它住在自己的容器里，用工作区里的 shell 和文件工具，
+      跑命令前经确认卡片问你；Wonton 插件的工具从聊天里调。
+
+      和它的对话是核心建的加密私聊，重启后接着聊。
     en: |
-      An example page: once you are signed in, the page says hello. Copy it as a starting point for a new plugin.
-  release_notes: { zh: 名字和说明更新。, en: Product name and description update. }
-  webui:
-    service: web
-    port: 80
-    # 应用不认 OIDC 时，由网关在请求上加上用户名（README 的“网页入口和登录”）。
-    sso: proxy
-    proxy:
-      headers:
-        Remote-User: "{user}"
-  permissions: []
-  # 上游 nginx 官方镜像，amd64 和 arm64 都有；上游没写最低内存，按本机空闲实测取整（实测约 24M，取 64M）。
+      The agent calls models through the model gateway, with no account and no key to fill in. It lives in its own
+      container, uses the shell and file tools in its workspace, and asks through confirmation cards before running
+      commands; plugin tools from Wonton are called from the chat.
+
+      The chat is an encrypted direct message the core creates, and it carries on after a restart.
+  release_notes: { zh: 首个版本。, en: First release. }
+  agent:
+    protocol: acp
+  bot:
+    display_name: { zh: omp, en: omp }
+  bots:
+    services: [agent, bridge]
+  permissions:
+    - matrix.bot
+    - tools
+    - models
   requirements:
     arch: [amd64, arm64]
-    memory: 64M
+    memory: 1G
