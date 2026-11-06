@@ -32,19 +32,17 @@ scripts/dev.sh install
 `up` 在本机起一套云吞，打印它的地址（实例名取自目录名加 4 位随机数，端口随机）。插件没有网页，装好以后核心在聊天列表里
 建好和它的加密私聊，在那里和它说话；App 或 `scripts/dev.sh pair` 把它加进客户端。`install` 先列出插件要的权限，确认后装上。
 
-`docker-compose.yml` 的两个镜像按摘要固定：桥是主仓库发布的镜像，agent 是 `images/wonton-plugin-omp/` 构建的。本地开发前先
-按下面的“构建镜像”把它们构建出来并写上本地的摘要；镜像正式发布以后换成发布版本的摘要。
+`docker-compose.yml` 的两个镜像按摘要固定：桥是主仓库发布的 `ghcr.io/geraldpeng6/wonton-acp-bridge`，直接拉取；agent 是
+`images/wonton-plugin-omp/` 构建的。本地开发前先按下面的“构建镜像”把 agent 构建出来并写上本地的摘要；发布以后换成发布版本的摘要。
 
 ## 构建镜像
 
 ```bash
-docker build -t ghcr.io/geraldpeng6/wonton-acp-bridge:0.1.0 \
-  -f ../wonton-ro/deploy/dev/acp-bridge/Dockerfile ../wonton-ro
 docker build -t ghcr.io/geraldpeng6/wonton-plugin-omp:0.1.0 -f images/wonton-plugin-omp/Dockerfile images/wonton-plugin-omp
 ```
 
 构建出来的是本地镜像，`docker image inspect -f '{{.Id}}'` 就是要写回 compose 的摘要。桥的 Dockerfile 在主仓库，
-`images/` 里没有它时 `scripts/publish.sh` 不会动它。
+`scripts/publish.sh` 不会动它。
 
 ## 仓库里有什么
 
