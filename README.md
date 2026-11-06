@@ -487,7 +487,9 @@ scripts/check.sh
 ## 发布
 
 1. 把清单的 `version` 改成新版本，写好 `release_notes`，确认 `notices` 和它引用的文件是最新的，提交。
-2. 执行 `scripts/publish.sh`（要进官方商店加 `--official`）。它检查工作区干净、插件包合格；`images/` 里有自己的镜像时先
+2. 仓库公开时在 GitHub 的 Actions 里运行“发布”（`.github/workflows/publish.yml`，默认带 `--official`），它在 GitHub 的机器上
+   执行 `scripts/publish.sh`，用 `GITHUB_TOKEN` 推镜像，本机不用登录镜像仓库。私有仓库在本机执行 `scripts/publish.sh`
+   （要进官方商店加 `--official`）。它检查工作区干净、插件包合格；`images/` 里有自己的镜像时先
    构建、推送并按摘要写回，然后打 tag `v<版本>`，推送当前分支和 tag。示例只用上游的 nginx 镜像，没有 `images/`，直接
    打 tag。
 
@@ -496,7 +498,8 @@ scripts/check.sh
 
 插件要用自己构建的镜像时，把 Dockerfile 放在 `images/<名字>/`，compose 里写 `image: ghcr.io/<你>/<名字>:<版本>`。
 `publish.sh` 用 `docker buildx` 构建 linux/amd64 和 linux/arm64 的镜像，推上去，把 compose 里这一行改成新版本的摘要再
-提交。这需要能构建多架构镜像的 buildx，和 `docker login` 登录镜像仓库；镜像要公开，用户的服务器才拉得到。核心不构建镜像，
+提交。在本机执行时要有能构建多架构镜像的 buildx，并用 `docker login` 登录镜像仓库。镜像第一次推上去以后，到 GitHub 的
+包设置里确认它是公开的，用户的服务器才拉得到。核心不构建镜像，
 所以 compose 里不能写 `build`。开发时先在本机构建同名的镜像（`docker build -t ghcr.io/<你>/<名字>:<版本> images/<名字>`），
 本机有这个镜像时核心不去拉取。
 
