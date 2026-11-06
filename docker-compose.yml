@@ -2,7 +2,7 @@
 # crypto store 和 Matrix 令牌不给 agent，agent 的 HOME 和工作区不给 bridge。
 services:
   agent:
-    image: ghcr.io/geraldpeng6/wonton-plugin-omp:0.1.1@sha256:e0b44c79a0a5caca4f38d2b20c313dee1e600254bba5ea0fe19a17761860e1e5
+    image: ghcr.io/geraldpeng6/wonton-plugin-omp:0.1.1
     # 镜像里固定用 65532，入口脚本不再降权；bridge 挂同一个 run/ 目录，两个服务的属主必须相同，否则核心拒绝安装。
     user: "65532:65532"
     restart: unless-stopped
