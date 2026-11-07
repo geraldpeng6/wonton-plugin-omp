@@ -2,16 +2,17 @@
 # crypto store 和 Matrix 令牌不给 agent，agent 的 HOME 和工作区不给 bridge。
 services:
   agent:
-    image: ghcr.io/geraldpeng6/wonton-plugin-omp:0.1.0@sha256:52640a740d556cae17a76c04d41e1978c6e132b887012931a991b5a96a4810da
+    image: ghcr.io/geraldpeng6/wonton-plugin-omp:0.1.1
     # 镜像里固定用 65532，入口脚本不再降权；bridge 挂同一个 run/ 目录，两个服务的属主必须相同，否则核心拒绝安装。
     user: "65532:65532"
     restart: unless-stopped
     environment:
       HOME: /data/agent/home
       # omp 不读 OPENAI_BASE_URL/OPENAI_MODEL，入口脚本把它们转成 models.yml 和 config.yml；密钥只引用变量名。
-      OPENAI_BASE_URL: ${WONTON_MODEL_BASE_URL:?需要模型网关地址}
-      OPENAI_API_KEY: ${WONTON_MODEL_API_KEY:?需要模型网关凭据}
-      OPENAI_MODEL: ${WONTON_MODEL_DEFAULT:?需要默认模型}
+      # 模型网关是可选的：核心没接上网关时这三个变量是空字符串，入口脚本按有没有值选路。
+      OPENAI_BASE_URL: ${WONTON_MODEL_BASE_URL}
+      OPENAI_API_KEY: ${WONTON_MODEL_API_KEY}
+      OPENAI_MODEL: ${WONTON_MODEL_DEFAULT}
       WONTON_ACP_SOCKET: /data/run/acp.sock
       WONTON_AGENT_WORKSPACE: /workspace
       # 插件网络是内部网络，到模型网关和 Matrix 都直连；Docker 注入的代理变量会让内部请求走代理，这里清掉。
@@ -68,7 +69,7 @@ services:
 x-wonton:
   spec: "0.6"
   id: ai.omp.agent
-  version: 0.1.0
+  version: 0.1.1
   kind: agent
   title: { zh: omp, en: omp }
   description:
@@ -84,19 +85,28 @@ x-wonton:
   tags: { zh: [AI, 开发], en: [AI, Development] }
   about:
     zh: |
-      Agent 的模型经模型网关走，不用账号，也不用填任何 key。它住在自己的容器里，用工作区里的 shell 和文件工具，
-      跑命令前经确认卡片问你；Wonton 插件的工具从聊天里调。
+      有模型网关时，模型的调用默认走网关，不用账号，也不用填任何 key。没接网关时 Agent 照样能起来：在聊天里发
+      /wonton login，用它自己的官方登录——模型账号（链接发进聊天，浏览器里授权后把跳转地址或授权码发回来）或
+      直接填模型的 key。它住在自己的容器里，用工作区里的 shell 和文件工具，跑命令前经确认卡片问你；Wonton 插件
+      的工具从聊天里调。
 
       和它的对话是核心建的加密私聊，重启后接着聊。
     en: |
-      The agent calls models through the model gateway, with no account and no key to fill in. It lives in its own
-      container, uses the shell and file tools in its workspace, and asks through confirmation cards before running
-      commands; plugin tools from Wonton are called from the chat.
+      With the model gateway connected, models are called through it, with no account and no key to fill in. Without a
+      gateway the agent still starts: send /wonton login in the chat to use its own official sign-in — a model account
+      (the link is posted to the chat; after authorizing in the browser, send the redirect URL or code back) or a model
+      key. It lives in its own container, uses the shell and file tools in its workspace, and asks through confirmation
+      cards before running commands; plugin tools from Wonton are called from the chat.
 
       The chat is an encrypted direct message the core creates, and it carries on after a restart.
-  release_notes: { zh: 首个版本。, en: First release. }
+  release_notes:
+    zh: 模型网关变成可选：没接网关时也能用，在聊天里登录模型账号或填 key。
+    en: The model gateway is now optional; without one, sign in to a model account or fill a key from the chat.
   agent:
     protocol: acp
+    login:
+      - id: terminal
+        title: { zh: 模型账号登录, en: Model account sign-in }
   bot:
     display_name: { zh: omp, en: omp }
   bots:
@@ -105,6 +115,8 @@ x-wonton:
     - matrix.bot
     - tools
     - models
+    # 账号登录（agent.login）后模型请求直接发给官方，不经网关，要出网。
+    - network.egress
   requirements:
     arch: [amd64, arm64]
     memory: 1G
