@@ -102,8 +102,8 @@ x-wonton:
 
       The chat is an encrypted direct message the core creates, and it carries on after a restart.
   release_notes:
-    zh: 模型网关变成可选：没接网关时也能用，在聊天里登录模型账号或填 key。
-    en: The model gateway is now optional; without one, sign in to a model account or fill a key from the chat.
+    zh: "适配新版核心的名单变量名，旧核心照常能装，用起来没有变化。"
+    en: "Adapts to the new core's allow-list variable name; still installs on older cores, nothing changes in use."
   agent:
     protocol: acp
     login:
