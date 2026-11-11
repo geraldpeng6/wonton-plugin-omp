@@ -1,6 +1,6 @@
 # omp
 
-开发流程见[插件开发指南](https://github.com/geraldpeng6/wonton-docs/blob/main/develop.md)。
+开发流程见[插件开发指南](https://github.com/wontonapp/wonton-docs/blob/main/develop.md)。
 
 omp 是住在云吞里的 Agent：用核心分配的 Matrix 身份和主人聊天，经 Wonton MCP 总线调用工具。
 它只说 ACP，插件里自带一个固定的 Wonton ACP 桥。
